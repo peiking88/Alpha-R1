@@ -20,9 +20,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 
-from .alpha101_qlib import QLIB_EXPRESSIONS, custom_ops_config, set_cs_universe, clear_panel_cache
-from .data import init_qlib
 from .linear_model import load_betas, score_stocks
 
 TRADING_DAYS_PER_YEAR = 252
@@ -157,6 +156,7 @@ def _parse_selection_dates(selections: dict) -> dict[pd.Timestamp, list[str]]:
 
 
 def _load_panels(expressions: list[str], market: str, start, end) -> pd.DataFrame:
+    """Legacy: load panels via qlib (kept for backward compat)."""
     from qlib.data import D
 
     instruments = D.instruments(market=market)
@@ -167,67 +167,64 @@ def _load_panels(expressions: list[str], market: str, start, end) -> pd.DataFram
 def run_strategy(selections: dict[str, list[str]], betas_path: str, config: dict) -> dict:
     """Run the end-to-end backtest for one selections mapping.
 
-    Args:
-        selections: decision date -> selected factor names.
-        betas_path: CSV from ``linear_model.save_betas``.
-        config: parsed ``configs/strategy.yaml``.
-
-    Returns:
-        dict with metrics, daily nav/returns and per-day picks.
+    Uses the unified data loader (TDengine/Parquet/qlib) and GPU factor
+    computation.  No longer depends on qlib's expression engine.
     """
-    set_cs_universe(config["market"])
-    init_qlib(config["qlib_data_dir"], custom_ops=custom_ops_config())
-    clear_panel_cache()
-
-    from qlib.data import D
+    from ..data import load_ohlcv, load_calendar
+    from .torch_factors import compute_factors
 
     betas, intercept = load_betas(betas_path)
     selections = _parse_selection_dates(selections)
     top_n = config.get("top_n", 10)
-    holding = config.get("holding_days", 5)
 
-    cal = pd.DatetimeIndex(D.calendar(freq="day"))
-    start, end = pd.Timestamp(config["start_date"]), pd.Timestamp(config["end_date"])
-    decision_days = sorted(d for d in selections if start <= d <= end and d in cal)
+    # Load instruments and data
+    if config.get("custom_instruments"):
+        instruments = config["custom_instruments"]
+    else:
+        from ..data import load_instruments
+        instruments = load_instruments(config.get("market", "all"))
+
+    start, end = config["start_date"], config["end_date"]
+    print(f"[strategy] loading OHLCV for {len(instruments)} instruments ...")
+    panels = load_ohlcv(instruments, start, end)
+    cal = panels["calendar"]
+    close = panels["close"]
+
+    decision_days = sorted(
+        pd.Timestamp(str(d)) for d in selections
+        if pd.Timestamp(start) <= pd.Timestamp(str(d)) <= pd.Timestamp(end)
+        and pd.Timestamp(str(d)) in cal
+    )
     if not decision_days:
         raise ValueError("no selection dates fall inside the backtest window/calendar")
 
     factor_names = sorted({f for factors in selections.values() for f in factors})
-    unknown = [f for f in factor_names if f not in QLIB_EXPRESSIONS]
-    if unknown:
-        raise ValueError(f"unknown factor names in selections: {unknown}")
 
-    first_pos = cal.get_loc(decision_days[0])
-    if first_pos == 0:
-        raise ValueError("first decision day has no previous trading day in the calendar")
-    first = cal[first_pos - 1]  # factors are read at t-1
-    expressions = [QLIB_EXPRESSIONS[f] for f in factor_names]
-    raw = _load_panels(expressions + ["$close"], config["market"], first, end)
+    # Compute factors on GPU
+    device = config.get("device", "cuda")
+    print(f"[strategy] computing {len(factor_names)} factors on {device} ...")
+    F = compute_factors(
+        *(torch.as_tensor(panels[f], device=device) for f in ["close", "high", "low", "open", "volume", "vwap"]),
+        device=device,
+    )
 
-    factor_panels = {f: raw[QLIB_EXPRESSIONS[f]].unstack(level="instrument")
-                     for f in factor_names}
-    close = raw["$close"].unstack(level="instrument")
-    vwap = None
-    try:  # official qlib bundles have no $vwap field
-        vwap_raw = _load_panels(["$vwap"], config["market"], first, end)
-        vwap = vwap_raw["$vwap"].unstack(level="instrument")
-        if vwap.isna().all().all():
-            vwap = None
-    except Exception as e:
-        print(f"[strategy] $vwap unavailable ({e}); falling back to $close for fills")
-    if vwap is None:
-        print("[strategy] fills use $close")
+    # Build factor panels as DataFrames
+    inst_list = instruments if isinstance(instruments, list) else list(instruments)
+    factor_panels = {f: pd.DataFrame(F[f].cpu().numpy(), index=cal, columns=inst_list)
+                     for f in factor_names if f in F}
+    close_df = pd.DataFrame(close, index=cal, columns=inst_list)
 
     picks: dict[pd.Timestamp, list[str]] = {}
     for day in decision_days:
-        prev = cal[max(cal.get_loc(day) - 1, 0)]
-        day_values = pd.DataFrame({f: factor_panels[f].loc[prev]
+        prev_idx = max(cal.get_loc(day) - 1, 0)
+        day_values = pd.DataFrame({f: factor_panels[f].iloc[prev_idx]
                                    for f in selections[day] if f in factor_panels})
         scores = score_stocks(day_values, selections[day], betas, intercept)
         if scores is not None:
             picks[day] = list(scores.nlargest(top_n).index)
 
     sim_cal = cal[(cal >= decision_days[0]) & (cal <= end)]
+    holding = config.get("holding_days", 5)
     engine = SlotBacktest(
         holding_days=holding,
         fee=config.get("fee", 0.001),
@@ -235,14 +232,16 @@ def run_strategy(selections: dict[str, list[str]], betas_path: str, config: dict
         reject_limit_locked=config.get("reject_limit_locked", False),
         limit_threshold=config.get("limit_threshold", 0.098),
     )
-    result = engine.run(sim_cal, picks, close, vwap)
+    vwap_df = pd.DataFrame(panels["vwap"], index=cal, columns=inst_list) if panels.get("vwap") is not None else None
+    result = engine.run(sim_cal, picks, close_df, vwap_df)
 
     benchmark_ret = None
     if config.get("benchmark"):
         try:
-            bench_df = D.features([config["benchmark"]], ["$close"],
-                                  start_time=sim_cal[0], end_time=sim_cal[-1])
-            bench_close = bench_df.iloc[:, 0].droplevel("instrument")
+            # Load benchmark via the unified data loader
+            from ..data import load_ohlcv
+            bench_panels = load_ohlcv([config["benchmark"]], str(sim_cal[0]), str(sim_cal[-1]))
+            bench_close = pd.Series(bench_panels["close"][:, 0], index=bench_panels["calendar"])
             benchmark_ret = bench_close.pct_change()
         except Exception as e:
             print(f"[strategy] benchmark {config['benchmark']} unavailable: {e}")
