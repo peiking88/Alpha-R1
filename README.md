@@ -205,4 +205,4 @@ examples/          minimal example inputs
   - ✅ 推理代码（Alpha Screening Pipeline）
   - ✅ 模型权重（[`FinStep/Alpha-R1`](https://huggingface.co/FinStep/Alpha-R1)）
 
-*欢迎 ⭐ Star 本仓库，获取最新进展！*
+_欢迎 ⭐ Star 本仓库，获取最新进展！_

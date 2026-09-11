@@ -32,22 +32,73 @@ def _json_safe(obj):
     return obj
 
 
-def _load_panels(names: list[str], market: str, start: str, end: str,
-                 ic_horizon: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load factor panels and forward returns as datetime x instrument frames."""
+def _load_instruments(qlib_dir: str, custom: list[str] | None = None) -> list[str]:
+    """Read instrument list from qlib's instruments/all.txt or a custom list.
+
+    ``D.instruments()`` returns a dict in newer qlib, so we read directly.
+    """
+    if custom:
+        return list(custom)
+    all_txt = Path(qlib_dir).expanduser() / "instruments" / "all.txt"
+    instruments = []
+    for line in all_txt.read_text().splitlines():
+        if line.strip():
+            instruments.append(line.split("\t")[0])
+    return instruments
+
+
+def _load_batch(D, instruments, expressions, start, end):
+    """Load a batch of expressions in one shot. Returns DataFrame or raises."""
+    df = D.features(instruments, expressions, start_time=start, end_time=end)
+    return df
+
+
+def _load_panels(names: list[str], qlib_dir: str, start: str, end: str,
+                 ic_horizon: int, batch_size: int = 10,
+                 custom_instruments: list[str] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load factor panels and forward returns as datetime x instrument frames.
+
+    Loads factors in batches for speed; if a batch fails (sparse instrument
+    crashing a rolling op), retries each factor in that batch individually.
+    """
     from qlib.data import D
 
     expressions = [QLIB_EXPRESSIONS[n] for n in names]
     fwd_expr = f"Ref($close, -{ic_horizon}) / $close - 1"
-    instruments = D.instruments(market=market)
+    instruments = _load_instruments(qlib_dir, custom=custom_instruments)
 
-    factor_df = D.features(instruments, expressions, start_time=start, end_time=end)
+    # Filter to instruments with full-window coverage: some listings are
+    # sparse (newly listed, suspended) and crash qlib's rolling ops with
+    # empty-series broadcast errors.
+    if custom_instruments is None:
+        close_df = D.features(instruments, ["$close"], start_time=start, end_time=end)
+        counts = close_df.iloc[:, 0].groupby(level="instrument").count()
+        threshold = max(252, int(counts.quantile(0.2)))
+        valid = counts[counts >= threshold].index.tolist()
+        if len(valid) < len(instruments):
+            print(f"[backtest] filtered instruments {len(instruments)} -> {len(valid)} "
+                  f"(sparse-data drop, threshold={threshold} days)")
+            instruments = valid
+
+    # Batch load with per-factor fallback.
+    frames: dict[str, pd.DataFrame] = {}
+    for i in range(0, len(names), batch_size):
+        batch_names = names[i:i + batch_size]
+        batch_exprs = [QLIB_EXPRESSIONS[n] for n in batch_names]
+        try:
+            df = _load_batch(D, instruments, batch_exprs, start, end)
+            for name, expr in zip(batch_names, batch_exprs):
+                frames[name] = df[expr].unstack(level="instrument")
+        except Exception:
+            # Batch failed — retry each factor individually to isolate the culprit.
+            for name, expr in zip(batch_names, batch_exprs):
+                try:
+                    df = _load_batch(D, instruments, [expr], start, end)
+                    frames[name] = df.iloc[:, 0].unstack(level="instrument")
+                except Exception as e:
+                    print(f"[backtest] SKIP {name}: {e}")
+
     fwd_df = D.features(instruments, [fwd_expr], start_time=start, end_time=end)
-
-    frames = {}
-    for name, expr in zip(names, expressions):
-        frames[name] = factor_df[expr].unstack(level="instrument")
-
     fwd_panel = fwd_df.iloc[:, 0].unstack(level="instrument")
     return frames, fwd_panel
 
@@ -197,8 +248,10 @@ def backtest_factors(names: list[str], config: dict) -> dict[str, dict]:
 
     clear_panel_cache()
     frames, fwd_panel = _load_panels(
-        names, config["market"], config["start_date"], config["end_date"],
+        names, config["qlib_data_dir"], config["start_date"], config["end_date"],
         config.get("ic_horizon", 1),
+        batch_size=config.get("batch_size", 10),
+        custom_instruments=config.get("custom_instruments"),
     )
     benchmark_ret = None
     if config.get("benchmark"):

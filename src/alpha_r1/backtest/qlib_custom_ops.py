@@ -60,6 +60,11 @@ class _CSOp(ExpressionOps):
     def __init__(self, feature):
         self.feature = feature
 
+    def __neg__(self):
+        # Support unary minus in expressions like `-1 * Delta(...)` which qlib's
+        # parser may rewrite as `-(...)` applied to the op instance.
+        return _NegOp(self)
+
     def __str__(self):
         return f"{type(self).__name__}({self.feature})"
 
@@ -149,6 +154,28 @@ class TsArgMin(_RollingWindowOp):
             lambda w: float(len(w) - np.argmin(w)), raw=True)
 
 
+class _NegOp(ExpressionOps):
+    """Unary minus wrapper: ``-X`` for any expression op."""
+
+    def __init__(self, feature):
+        self.feature = feature
+
+    def __neg__(self):
+        return self.feature  # --x == x
+
+    def __str__(self):
+        return f"-{self.feature}"
+
+    def _load_internal(self, instrument, start_index, end_index, *args):
+        return -self.feature.load(instrument, start_index, end_index, *args)
+
+    def get_longest_back_rolling(self):
+        return self.feature.get_longest_back_rolling()
+
+    def get_extended_window_size(self):
+        return self.feature.get_extended_window_size()
+
+
 class SignedPower(ExpressionOps):
     """WorldQuant ``SignedPower(x, a)`` = sign(x) * |x| ** a; a may be an expression."""
 
@@ -182,3 +209,26 @@ class SignedPower(ExpressionOps):
 
 
 CUSTOM_OPS = [CSRank, CSScale, DecayLinear, SignedPower, TsArgMax, TsArgMin]
+
+
+# ---------------------------------------------------------------------------
+# Patch qlib's built-in ExpressionOps to support unary minus.
+# Alpha101 expressions use ``-1 * Op(...)``; qlib's parser can rewrite that
+# as a unary minus on the op instance.  Built-in ops (Delta, Sign, ...) don't
+# implement ``__neg__``, which raises
+# ``TypeError: bad operand type for unary -: 'Delta'``.  Monkey-patching the
+# base class fixes every built-in op at once.
+# ---------------------------------------------------------------------------
+def _patch_builtin_neg() -> None:
+    from qlib.data.base import ExpressionOps
+
+    if getattr(ExpressionOps, "__neg__", None) is not None:
+        return
+
+    def _neg(self):
+        return _NegOp(self)
+
+    ExpressionOps.__neg__ = _neg  # type: ignore[attr-defined]
+
+
+_patch_builtin_neg()

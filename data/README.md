@@ -24,6 +24,6 @@ Alternatives:
 - qlib data: instead of converting `stock_data/` yourself, you may use an
   official qlib community data bundle (see the qlib documentation for the
   current data-collector commands) and point `configs/backtest.yaml:
-  qlib_data_dir` at it.
+qlib_data_dir` at it.
 - price/news descriptions: any plain-text daily summaries work; keep the
   filename conventions above so the loaders can align them with trading days.

@@ -21,8 +21,8 @@ max_workers: 3
 max_retries: 5
 retry_delay: 2
 
-market_memory_dir: data/market_memory     # M_global.txt and weekly intermediates
-price_market_dir: data/price_market       # daily price description txt files
-news_dir: data/news                       # daily news description txt files
-backtest_dir: result/alpha_backtest       # P_i vectors from the qlib backtest
-output_dir: result/alpha_des              # generated alphaNNN.txt descriptions
+market_memory_dir: data/market_memory # M_global.txt and weekly intermediates
+price_market_dir: data/price_market # daily price description txt files
+news_dir: data/news # daily news description txt files
+backtest_dir: result/alpha_backtest # P_i vectors from the qlib backtest
+output_dir: result/alpha_des # generated alphaNNN.txt descriptions

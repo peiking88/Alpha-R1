@@ -6,6 +6,9 @@ data/*
 !data/README.md
 result/
 
+# Downloaded model weights
+model/
+
 # Python
 __pycache__/
 *.py[cod]

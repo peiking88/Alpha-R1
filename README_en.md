@@ -204,4 +204,4 @@ This project is released under the [MIT License](https://opensource.org/licenses
   - ✅ Inference code (Alpha Screening Pipeline)
   - ✅ Model weights ([`FinStep/Alpha-R1`](https://huggingface.co/FinStep/Alpha-R1))
 
-*Please ⭐ Star this repo to stay updated!*
+_Please ⭐ Star this repo to stay updated!_

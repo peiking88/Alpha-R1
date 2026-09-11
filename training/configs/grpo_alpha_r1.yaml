@@ -3,7 +3,7 @@
 # Model/data paths must be set for your environment before launching.
 
 data:
-  train_files: ${oc.env:TRAIN_FILES}      # parquet with decision-context prompts
+  train_files: ${oc.env:TRAIN_FILES} # parquet with decision-context prompts
   val_files: ${oc.env:TEST_FILES}
   train_batch_size: 32
   val_batch_size: 23
@@ -16,11 +16,11 @@ data:
 
 actor_rollout_ref:
   model:
-    path: ${oc.env:MODEL_PATH}            # e.g. Qwen/Qwen3-8B
+    path: ${oc.env:MODEL_PATH} # e.g. Qwen/Qwen3-8B
     use_remove_padding: True
     enable_gradient_checkpointing: True
   actor:
-    clip_ratio_low: 0.15                  # asymmetric clip range (Eq. 11)
+    clip_ratio_low: 0.15 # asymmetric clip range (Eq. 11)
     clip_ratio_high: 0.25
     optim:
       lr: 1e-6
@@ -45,7 +45,7 @@ actor_rollout_ref:
       param_offload: True
   rollout:
     name: vllm
-    n: 8                                  # GRPO group size G
+    n: 8 # GRPO group size G
     temperature: 1.0
     top_p: 1.0
     top_k: -1
@@ -63,15 +63,15 @@ actor_rollout_ref:
 algorithm:
   adv_estimator: grpo
   use_kl_in_reward: False
-  norm_adv_by_std_in_grpo: True           # Eq. 10 advantage normalization
+  norm_adv_by_std_in_grpo: True # Eq. 10 advantage normalization
 
 reward_model:
   reward_manager: batch
   reward_kwargs:
-    enable_llm_judge: false               # stub judge is off by default (Eq. 8-9)
+    enable_llm_judge: false # stub judge is off by default (Eq. 8-9)
 
 custom_reward_function:
-  path: training/reward.py                # reference market-feedback reward
+  path: training/reward.py # reference market-feedback reward
   name: compute_score_batch
 
 trainer:
