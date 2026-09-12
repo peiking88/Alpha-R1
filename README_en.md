@@ -4,7 +4,7 @@
 
 <div align="center" style="line-height: 1;">
   <a href="https://arxiv.org/abs/2512.23515" target="_blank"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2512.23515-B31B1B?logo=arxiv"/></a>
-  <a href="https://huggingface.co/FinStep/Alpha-R1" target="_blank"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-FinStep%2FAlpha--R1-yellow"/></a>
+  <a href="https://hf-mirror.com/FinStep/Alpha-R1" target="_blank"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-FinStep%2FAlpha--R1-yellow"/></a>
   <a href="https://opensource.org/licenses/MIT" target="_blank"><img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/></a>
   <a href="https://www.python.org/downloads/release/python-3100/" target="_blank"><img alt="Python Version" src="https://img.shields.io/badge/Python-3.10+-brightgreen.svg"/></a>
 </div>
@@ -203,7 +203,7 @@ This project is released under the [MIT License](https://opensource.org/licenses
 - **[2025.12]** 📄 Paper released on [arXiv](https://arxiv.org/abs/2512.23515).
 - **[2026.09]** 🧩 Code release: qlib single-factor backtests, factor description generation (OpenRouter), Alpha-R1 inference, output parsing, end-to-end strategy backtest, and the GRPO training config + reference reward.
   - ✅ Inference code (Alpha Screening Pipeline)
-  - ✅ Model weights ([`FinStep/Alpha-R1`](https://huggingface.co/FinStep/Alpha-R1))
+  - ✅ Model weights ([`FinStep/Alpha-R1`](https://hf-mirror.com/FinStep/Alpha-R1))
 - **[2026.09]** 🔄 Direct data layer: qlib/CSV intermediate pipeline removed, end-to-end TDengine direct + GPU factor computation; BJ exchange excluded from universe; env-check skill `check-alpha-r1-env` added.
 
 _Please ⭐ Star this repo to stay updated!_

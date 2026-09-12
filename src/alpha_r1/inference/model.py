@@ -1,5 +1,11 @@
 """Transformers (Hugging Face) inference backend for Alpha-R1."""
 
+import os
+
+# Default to the HF mirror (the official hub is unreachable from CN networks).
+# Must be set before huggingface_hub is imported; override via HF_ENDPOINT.
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -10,7 +16,7 @@ class HFBackend:
     """Standard ``from_pretrained`` loading; works with hub ids and local paths.
 
     ``FinStep/Alpha-R1`` is public; if you point ``model_id`` at a gated or
-    private repo instead, authenticate with ``HF_TOKEN`` or ``huggingface-cli login``.
+    private repo instead, authenticate with ``HF_TOKEN`` or ``hf auth login``.
     """
 
     def __init__(self, model_id: str, temperature: float = 0.0, top_p: float = 0.7,

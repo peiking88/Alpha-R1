@@ -4,7 +4,7 @@
 
 <div align="center" style="line-height: 1;">
   <a href="https://arxiv.org/abs/2512.23515" target="_blank"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2512.23515-B31B1B?logo=arxiv"/></a>
-  <a href="https://huggingface.co/FinStep/Alpha-R1" target="_blank"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-FinStep%2FAlpha--R1-yellow"/></a>
+  <a href="https://hf-mirror.com/FinStep/Alpha-R1" target="_blank"><img alt="Hugging Face" src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-FinStep%2FAlpha--R1-yellow"/></a>
   <a href="https://opensource.org/licenses/MIT" target="_blank"><img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"/></a>
   <a href="https://www.python.org/downloads/release/python-3100/" target="_blank"><img alt="Python Version" src="https://img.shields.io/badge/Python-3.10+-brightgreen.svg"/></a>
 </div>
@@ -204,7 +204,7 @@ examples/          minimal example inputs
 - **[2025.12]** 📄 论文发布于 [arXiv](https://arxiv.org/abs/2512.23515)。
 - **[2026.09]** 🧩 代码发布：qlib 单因子回测、因子描述生成（OpenRouter）、Alpha-R1 推理、输出解析、端到端策略回测，以及 GRPO 训练配置 + 参考奖励实现。
   - ✅ 推理代码（Alpha Screening Pipeline）
-  - ✅ 模型权重（[`FinStep/Alpha-R1`](https://huggingface.co/FinStep/Alpha-R1)）
+  - ✅ 模型权重（[`FinStep/Alpha-R1`](https://hf-mirror.com/FinStep/Alpha-R1)）
 - **[2026.09]** 🔄 数据层直连化：移除 qlib/CSV 中间链路，全链路 TDengine 直连 + GPU 因子计算；universe 排除北交所；新增环境体检技能 `check-alpha-r1-env`。
 
 _欢迎 ⭐ Star 本仓库，获取最新进展！_
