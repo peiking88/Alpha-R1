@@ -22,7 +22,6 @@ dependencies = [
 
 [project.optional-dependencies]
 vllm = ["vllm>=0.6"]
-qlib = ["pyqlib>=0.9"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

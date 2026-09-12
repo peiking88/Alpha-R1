@@ -28,9 +28,9 @@
 Alpha-R1 screens a candidate pool of [Alpha101](https://arxiv.org/abs/1601.00991) factors. Instead of treating alphas as bare time series, it reasons over **semantic factor descriptions** — how each factor works, when it works, and when it fails — and activates the factors that fit current market conditions:
 
 ```
-qlib single-factor backtest (P_i) ─┐
-                                   ├─→ LLM factor descriptions α_des (OpenRouter)
-market memory (M_global) ──────────┘                 │
+TDengine direct single-factor backtest (P_i) ─┐
+                                              ├─→ LLM factor descriptions α_des (OpenRouter)
+market memory (M_global) ─────────────────────┘                 │
                                                      ↓
                            Alpha-R1 inference (FinStep/Alpha-R1)
                                                      ↓
@@ -39,7 +39,7 @@ market memory (M_global) ──────────┘                 │
                        end-to-end strategy backtest (NAV, AR/SR/MDD)
 ```
 
-1. **Single-factor backtesting** (paper §3.1.3): each Alpha101 factor is evaluated on qlib — factor values, IC/RankIC, and a top-k portfolio — and saved as a performance vector `P_i`.
+1. **Single-factor backtesting** (paper §3.1.3): each Alpha101 factor is computed from TDengine-direct data on the GPU — factor values, IC/RankIC, and a top-k portfolio — and saved as a performance vector `P_i`.
 2. **Factor description generation** (§3.1.2/§3.2.1): an LLM (via OpenRouter) iteratively aggregates daily price/news text into a global market memory `M_global`, then maps `M_global + P_i` into a structured description `α_des` per factor.
 3. **Alpha-R1 inference** (§3.3): descriptions are concatenated into the decision-context prompt; the model outputs the selected factors in `<alpha_list>...</alpha_list>`.
 4. **Output parsing**: responses are validated and parsed into `selections.json` / `summary.csv`.
@@ -50,8 +50,9 @@ market memory (M_global) ──────────┘                 │
 ```bash
 pip install -e .            # core (transformers inference + generation + parsing)
 pip install -e .[vllm]      # optional high-throughput inference backend
-pip install -e .[qlib]      # optional backtesting (pyqlib)
 ```
+
+Market data loads directly from TDengine (`taosws://localhost:6041`, db `tdx`) — no local CSV/qlib data preparation.
 
 API keys (see `.env.example`):
 
@@ -67,11 +68,11 @@ All steps read their defaults from `configs/`.
 ### 1. Single-factor backtests
 
 ```bash
-python scripts/prepare_qlib_data.py --csv-dir data/stock_data --qlib-dir ~/.qlib/qlib_data/alpha_r1
-python scripts/run_factor_backtest.py --alphas all
+python scripts/run_realtime_backtest.py --alphas all            # full universe (needs large VRAM)
+python scripts/run_realtime_backtest.py --alphas all --zxg      # watchlist universe (default path)
 ```
 
-Writes `result/alpha_backtest/alphaNNN.json` per factor. See `data/README.md` for data layout conventions.
+Writes `result/alpha_backtest/alphaNNN.json` per factor. `--device cpu` switches the compute device when VRAM is insufficient.
 
 ### 2. Factor descriptions
 
@@ -170,8 +171,8 @@ Alpha-R1 is trained with GRPO on Qwen3-8B using [verl](https://github.com/volcen
 ```
 src/alpha_r1/
 ├── factors/       Alpha101 formula library + description loading/concatenation
-├── backtest/      qlib data conversion, Alpha101→qlib expressions, single-factor
-│                  backtest, linear model, slot-rotation strategy backtest
+├── backtest/      TDengine-direct single-factor backtest (GPU factors), linear
+│                  model, slot-rotation strategy backtest
 ├── generation/    OpenRouter client, market memory, description generation
 ├── inference/     transformers / vLLM backends, prompt builder, selection loop
 └── parsing/       <alpha_list> extraction and validation
@@ -203,5 +204,6 @@ This project is released under the [MIT License](https://opensource.org/licenses
 - **[2026.09]** 🧩 Code release: qlib single-factor backtests, factor description generation (OpenRouter), Alpha-R1 inference, output parsing, end-to-end strategy backtest, and the GRPO training config + reference reward.
   - ✅ Inference code (Alpha Screening Pipeline)
   - ✅ Model weights ([`FinStep/Alpha-R1`](https://huggingface.co/FinStep/Alpha-R1))
+- **[2026.09]** 🔄 Direct data layer: qlib/CSV intermediate pipeline removed, end-to-end TDengine direct + GPU factor computation; BJ exchange excluded from universe; env-check skill `check-alpha-r1-env` added.
 
 _Please ⭐ Star this repo to stay updated!_

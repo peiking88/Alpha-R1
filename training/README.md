@@ -30,7 +30,7 @@ estimated linear coefficients (betas); see the `RewardContext` docstring for
 the expected file formats. Betas are estimated on the pre-training window
 (2020-2023 in the paper) by cross-sectional regression of forward returns on
 factor values — `scripts/train_linear_model.py` produces a compatible
-`betas.csv` from qlib data.
+`betas.csv` from TDengine-direct data.
 
 ## Notes
 
