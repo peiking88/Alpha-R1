@@ -34,11 +34,15 @@ def main():
     parser.add_argument("--betas", required=True,
                         help="betas.csv from scripts/train_linear_model.py")
     parser.add_argument("--config", default="configs/strategy.yaml")
+    parser.add_argument("--device", default="cuda", choices=["cuda", "cpu"],
+                        help="torch device for factor computation (default: cuda; "
+                             "use cpu when the full universe exceeds GPU memory)")
     parser.add_argument("--output-dir", default=None,
                         help="override configs/strategy.yaml output_dir")
     args = parser.parse_args()
 
     config = yaml.safe_load(Path(args.config).read_text())
+    config["device"] = args.device
     output_dir = Path(args.output_dir or config.get("output_dir", "result/strategy_backtest"))
     rf = config.get("risk_free_rate", 0.0)
 

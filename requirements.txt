@@ -8,4 +8,3 @@ openai>=1.0
 python-dotenv>=1.0
 # Optional backends:
 #   vllm>=0.6        # high-throughput inference backend
-#   pyqlib>=0.9      # Alpha101 single-factor backtesting (requires Python <=3.12)

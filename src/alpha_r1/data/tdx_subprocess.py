@@ -53,8 +53,9 @@ def load_instruments(market: str = "all") -> list[str]:
 
 
 def load_calendar(start: str, end: str) -> pd.DatetimeIndex:
+    from .tdx_loader import _naive_dates
     d = _run_helper({"cmd": "calendar", "start": start, "end": end})
-    return pd.DatetimeIndex(d["calendar"])
+    return _naive_dates(pd.DatetimeIndex(d["calendar"]))
 
 
 def load_ohlcv(instruments: list[str], start: str, end: str) -> dict:
@@ -69,7 +70,8 @@ def load_ohlcv(instruments: list[str], start: str, end: str) -> dict:
             if p.exists():
                 panels[field] = np.load(str(p))
         cal_path = Path(tmpdir) / "calendar.json"
-        panels["calendar"] = pd.DatetimeIndex(json.loads(cal_path.read_text()))
+        from .tdx_loader import _naive_dates
+        panels["calendar"] = _naive_dates(pd.DatetimeIndex(json.loads(cal_path.read_text())))
         panels["instruments"] = instruments
     return panels
 
@@ -108,7 +110,8 @@ def main():
     conn = connect()
 
     if cmd == "instruments":
-        rows = query_all(conn, "SELECT market, code FROM stock_name")
+        # bj (北交所) excluded: extreme low-liquidity outliers distort factor scores
+        rows = query_all(conn, "SELECT market, code FROM stock_name WHERE market <> 'bj'")
         inst = sorted(set(f"{r['market'].upper()}{r['code']}" for r in rows))
         print(json.dumps({"instruments": inst}))
 

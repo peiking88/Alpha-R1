@@ -1,4 +1,4 @@
-"""Unified data loading interface — TDengine direct / Parquet / qlib.
+"""Unified data loading interface — TDengine direct / Parquet.
 
 Switch backends via ``source`` argument or ``ALPHA_R1_DATA_SOURCE`` env var.
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-Source = Literal["tdengine", "parquet", "qlib"]
+Source = Literal["tdengine", "parquet"]
 
 _DEFAULT_SOURCE = os.environ.get("ALPHA_R1_DATA_SOURCE", "tdengine")
 
@@ -31,8 +31,6 @@ def load_ohlcv(
         from .tdx_loader import load_ohlcv as _load
     elif source == "parquet":
         from .parquet_loader import load_ohlcv as _load
-    elif source == "qlib":
-        from .qlib_loader import load_ohlcv as _load
     else:
         raise ValueError(f"unknown data source: {source}")
     return _load(instruments, start, end)
@@ -44,8 +42,6 @@ def load_calendar(start: str, end: str, source: Source = _DEFAULT_SOURCE):
         from .tdx_loader import load_calendar as _load
     elif source == "parquet":
         from .parquet_loader import load_calendar as _load
-    elif source == "qlib":
-        from .qlib_loader import load_calendar as _load
     else:
         raise ValueError(f"unknown data source: {source}")
     return _load(start, end)
@@ -57,8 +53,6 @@ def load_instruments(market: str = "all", source: Source = _DEFAULT_SOURCE) -> l
         from .tdx_loader import load_instruments as _load
     elif source == "parquet":
         from .parquet_loader import load_instruments as _load
-    elif source == "qlib":
-        from .qlib_loader import load_instruments as _load
     else:
         raise ValueError(f"unknown data source: {source}")
     return _load(market)

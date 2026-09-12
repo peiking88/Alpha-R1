@@ -1,0 +1,16 @@
+{
+  "version": "1",
+  "skills": [
+    {
+      "name": "check-alpha-r1-env",
+      "version": "1.0.6",
+      "scope": "personal",
+      "created": "2026-09-12",
+      "updated": "2026-09-12",
+      "auto_trigger": true,
+      "description_chars": 292,
+      "eval_score": 7,
+      "usage_count": 0
+    }
+  ]
+}

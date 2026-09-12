@@ -155,20 +155,11 @@ def _parse_selection_dates(selections: dict) -> dict[pd.Timestamp, list[str]]:
     return {pd.Timestamp(str(d)): list(factors) for d, factors in selections.items()}
 
 
-def _load_panels(expressions: list[str], market: str, start, end) -> pd.DataFrame:
-    """Legacy: load panels via qlib (kept for backward compat)."""
-    from qlib.data import D
-
-    instruments = D.instruments(market=market)
-    df = D.features(instruments, expressions, start_time=start, end_time=end)
-    return df
-
-
 def run_strategy(selections: dict[str, list[str]], betas_path: str, config: dict) -> dict:
     """Run the end-to-end backtest for one selections mapping.
 
-    Uses the unified data loader (TDengine/Parquet/qlib) and GPU factor
-    computation.  No longer depends on qlib's expression engine.
+    Uses the unified data loader (TDengine/Parquet) and GPU factor
+    computation; no qlib expression engine involved.
     """
     from ..data import load_ohlcv, load_calendar
     from .torch_factors import compute_factors

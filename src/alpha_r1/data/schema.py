@@ -26,7 +26,7 @@ FIELD_TO_QLIB = {
 # Instrument classification (通达信 / TDengine conventions)
 # ---------------------------------------------------------------------------
 # market prefix in TDengine tbname: sh / sz / bj
-# instrument id in qlib / our code: SH / SZ / BJ (uppercase)
+# instrument id in our code: SH / SZ / BJ (uppercase)
 
 
 def code_to_instrument(market: str, code: str) -> str:

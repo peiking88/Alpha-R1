@@ -1,10 +1,7 @@
 # End-to-end strategy backtest (paper Section 3.3 + Appendix F execution protocol)
 # Used by scripts/train_linear_model.py and scripts/run_strategy_backtest.py
 
-# qlib binary data directory (produced by scripts/prepare_qlib_data.py)
-qlib_data_dir: ~/.qlib/qlib_data/alpha_r1
-
-# Universe / benchmark: qlib market name or "all"; benchmark null disables it
+# Universe: "all" (full TDengine universe); benchmark null disables it
 market: all
 benchmark: null
 
@@ -27,7 +24,7 @@ fee: 0.001
 risk_free_rate: 0.045
 
 # Limit-lock filter (daily-bar approximation of the paper's rule; off by default
-# because daily qlib data carries no limit-price flags)
+# because daily bars carry no limit-price flags)
 reject_limit_locked: false
 limit_threshold: 0.098
 

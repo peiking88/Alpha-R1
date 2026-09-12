@@ -1,8 +1,7 @@
 """Real-time / historical backtest engine — TDengine direct + GPU factors.
 
-Replaces the qlib-based ``strategy.py`` with a self-contained engine that
-loads data via the unified ``alpha_r1.data`` interface and computes factors
-with ``torch_factors.py`` on the GPU.
+Self-contained engine that loads data via the unified ``alpha_r1.data``
+interface and computes factors with ``torch_factors.py`` on the GPU.
 """
 
 from __future__ import annotations
@@ -12,12 +11,10 @@ import math
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 
-from ..data import load_ohlcv, load_calendar
+from ..data import load_ohlcv, load_instruments
 from .torch_factors import compute_factors
-from .linear_model import load_betas, score_stocks
 
 
 def _json_safe(obj):
@@ -27,7 +24,7 @@ def _json_safe(obj):
         return {k: _json_safe(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_json_safe(v) for v in obj]
-    return None
+    return obj
 
 
 def _ic_stats(factor: np.ndarray, fwd: np.ndarray) -> dict:
@@ -140,19 +137,13 @@ def run_factor_backtest(
     Args:
         names: factor names (e.g. ``["alpha001", ...]``).
         config: parsed ``configs/backtest.yaml``.
-        custom_instruments: optional instrument list. If None, reads from
-            qlib's all.txt (backward compat).
+        custom_instruments: optional instrument list. If None, the full
+            universe from the data source is used.
         device: torch device.
     """
     names = [n.lower() for n in names]
 
-    if custom_instruments:
-        instruments = custom_instruments
-    else:
-        # Backward compat: read from qlib's all.txt
-        qlib_dir = Path(config["qlib_data_dir"]).expanduser()
-        all_txt = qlib_dir / "instruments" / "all.txt"
-        instruments = [line.split("\t")[0] for line in all_txt.read_text().splitlines() if line.strip()]
+    instruments = custom_instruments or load_instruments(config.get("market", "all"))
 
     print(f"[backtest] loading OHLCV for {len(instruments)} instruments ...")
     panels = load_ohlcv(instruments, config["start_date"], config["end_date"])
@@ -200,61 +191,3 @@ def run_factor_backtest(
         print(f"[backtest] {name} -> {out_path}")
         results[name] = p_i
     return results
-
-
-def run_strategy_backtest(
-    selections: dict[str, list[str]],
-    betas_path: str,
-    config: dict,
-    custom_instruments: list[str] | None = None,
-    device: str = "cuda",
-) -> dict:
-    """End-to-end strategy backtest (replaces qlib-based strategy.py)."""
-    names = sorted({f for factors in selections.values() for f in factors})
-    instruments = custom_instruments or _load_instruments_legacy(config)
-
-    print(f"[strategy] loading OHLCV for {len(instruments)} instruments ...")
-    panels = load_ohlcv(instruments, config["start_date"], config["end_date"])
-    calendar = panels["calendar"]
-
-    close_t = torch.as_tensor(panels["close"], device=device)
-    high_t = torch.as_tensor(panels["high"], device=device)
-    low_t = torch.as_tensor(panels["low"], device=device)
-    open_t = torch.as_tensor(panels["open"], device=device)
-    volume_t = torch.as_tensor(panels["volume"], device=device)
-    vwap_t = torch.as_tensor(panels["vwap"], device=device)
-
-    print(f"[strategy] computing {len(names)} factors on {device} ...")
-    F = compute_factors(close_t, high_t, low_t, open_t, volume_t, vwap_t, device=device)
-
-    betas, intercept = load_betas(betas_path)
-    decision_days = sorted(pd.Timestamp(str(d)) for d in selections)
-
-    picks = {}
-    for day in decision_days:
-        if day not in calendar:
-            continue
-        idx = calendar.get_loc(day)
-        if idx == 0:
-            continue
-        prev = calendar[idx - 1]
-        prev_idx = calendar.get_loc(prev)
-        day_values = pd.DataFrame({
-            f: F[f][prev_idx].cpu().numpy() for f in selections[str(day)] if f in F
-        })
-        if day_values.empty:
-            continue
-        # Reindex to instruments
-        s = score_stocks(day_values, selections[str(day)], betas, intercept)
-        if s is not None:
-            top_n = config.get("top_n", 10)
-            picks[str(day)] = list(s.nlargest(top_n).index)
-
-    return {"picks": picks, "config": config}
-
-
-def _load_instruments_legacy(config: dict) -> list[str]:
-    """Backward compat: read instruments from qlib's all.txt."""
-    qlib_dir = Path(config["qlib_data_dir"]).expanduser()
-    all_txt = qlib_dir / "instruments" / "all.txt"
-    return [line.split("\t")[0] for line in all_txt.read_text().splitlines() if line.strip()]

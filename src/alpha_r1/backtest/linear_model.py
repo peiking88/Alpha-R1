@@ -8,6 +8,8 @@ day before entering the regression, and the same transform is applied at
 inference time. Only selected factors contribute to the score.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
@@ -69,6 +71,7 @@ def save_betas(betas: pd.Series, intercept: float, path: str) -> None:
     """Write the CSV consumed by strategy backtests and training/reward.py."""
     out = pd.DataFrame({"factor": list(betas.index) + ["_intercept"],
                         "beta": list(betas.values) + [intercept]})
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(path, index=False)
 
 

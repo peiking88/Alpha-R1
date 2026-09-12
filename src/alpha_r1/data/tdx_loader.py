@@ -34,6 +34,17 @@ def _query(conn, sql: str) -> list[dict]:
     return [dict(zip(cols, row)) for row in r]
 
 
+def _naive_dates(idx: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    """Normalize a calendar to tz-naive plain dates.
+
+    TDengine daily bars carry an intraday timestamp (e.g. ``15:00+08:00``);
+    downstream date comparisons (decision days, windows) use plain dates.
+    """
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    return idx.normalize()
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -69,7 +80,8 @@ def load_realtime_bar(instrument: str) -> dict:
 def _load_instruments_proc(market: str = "all") -> list[str]:
     conn = _connect()
     try:
-        rows = _query(conn, "SELECT market, code FROM stock_name")
+        # bj (北交所) excluded: extreme low-liquidity outliers distort factor scores
+        rows = _query(conn, "SELECT market, code FROM stock_name WHERE market <> 'bj'")
     finally:
         conn.close()
     return sorted(set(code_to_instrument(r["market"], r["code"]) for r in rows))
@@ -85,7 +97,7 @@ def _load_calendar_proc(start: str, end: str) -> pd.DatetimeIndex:
         )
     finally:
         conn.close()
-    return pd.DatetimeIndex([pd.Timestamp(r["ts"]) for r in rows])
+    return _naive_dates(pd.DatetimeIndex([pd.Timestamp(r["ts"]) for r in rows]))
 
 
 def _load_ohlcv_proc(instruments: list[str], start: str, end: str) -> dict:
@@ -131,6 +143,9 @@ def _rows_to_panel(rows, instruments, start, end):
         return _empty_panel(instruments, start, end)
     df = pd.DataFrame(rows)
     df["ts"] = pd.to_datetime(df["ts"])
+    if df["ts"].dt.tz is not None:
+        df["ts"] = df["ts"].dt.tz_localize(None)
+    df["ts"] = df["ts"].dt.normalize()
     df["instrument"] = df.apply(lambda r: code_to_instrument(r["market"], r["code"]), axis=1)
     calendar = pd.DatetimeIndex(sorted(df["ts"].unique()))
     panels = {}

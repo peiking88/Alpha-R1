@@ -1,10 +1,6 @@
-# qlib single-factor backtesting (Alpha101), used by scripts/run_factor_backtest.py
+# Single-factor backtesting (Alpha101), used by scripts/run_realtime_backtest.py
 
-# qlib binary data directory (produced by scripts/prepare_qlib_data.py)
-qlib_data_dir: ~/.qlib/qlib_data/alpha_r1
-
-# Universe / benchmark: qlib market name (csi300, csi1000, sp500, ...) or "all".
-# Self-converted data has no index membership lists, so use "all" there.
+# Universe: "all" (full TDengine universe) or a custom list passed via --zxg.
 market: all
 # Benchmark instrument for excess-return stats; set to null to disable.
 benchmark: null

@@ -29,18 +29,18 @@
 Alpha-R1 从 [Alpha101](https://arxiv.org/abs/1601.00991) 候选因子池中筛选因子。它不把 alpha 当作裸的时间序列，而是基于**语义化的因子描述**进行推理——每个因子如何起作用、何时有效、何时失效——并激活与当前市场环境相匹配的因子：
 
 ```
-qlib single-factor backtest (P_i) ─┐
-                                   ├─→ LLM factor descriptions α_des (OpenRouter)
-market memory (M_global) ──────────┘                 │
-                                                     ↓
-                           Alpha-R1 inference (FinStep/Alpha-R1)
-                                                     ↓
-                               parsed selections (selections.json)
-                                                     ↓
-                       end-to-end strategy backtest (NAV, AR/SR/MDD)
+TDengine direct single-factor backtest (P_i) ─┐
+                                              ├─→ LLM factor descriptions α_des (OpenRouter)
+market memory (M_global) ─────────────────────┘                 │
+                                                                ↓
+                                  Alpha-R1 inference (FinStep/Alpha-R1)
+                                                                ↓
+                                    parsed selections (selections.json)
+                                                                ↓
+                            end-to-end strategy backtest (NAV, AR/SR/MDD)
 ```
 
-1. **单因子回测**（论文 §3.1.3）：每个 Alpha101 因子在 qlib 上评估——因子值、IC/RankIC 与 top-k 组合——并保存为绩效向量 `P_i`。
+1. **单因子回测**（论文 §3.1.3）：每个 Alpha101 因子直连 TDengine 加载数据、GPU 计算——因子值、IC/RankIC 与 top-k 组合——并保存为绩效向量 `P_i`。
 2. **因子描述生成**（§3.1.2/§3.2.1）：LLM（经由 OpenRouter）将每日行情/新闻文本迭代聚合为全局市场记忆 `M_global`，再将 `M_global + P_i` 映射为每个因子的结构化描述 `α_des`。
 3. **Alpha-R1 推理**（§3.3）：因子描述拼接为决策上下文 prompt，模型以 `<alpha_list>...</alpha_list>` 输出所选因子。
 4. **输出解析**：对响应进行校验，并解析为 `selections.json` / `summary.csv`。
@@ -51,8 +51,9 @@ market memory (M_global) ──────────┘                 │
 ```bash
 pip install -e .            # core (transformers inference + generation + parsing)
 pip install -e .[vllm]      # optional high-throughput inference backend
-pip install -e .[qlib]      # optional backtesting (pyqlib)
 ```
+
+行情数据从 TDengine 直连加载（`taosws://localhost:6041`，库 `tdx`），无需本地 CSV/qlib 数据准备。
 
 API 密钥（见 `.env.example`）：
 
@@ -68,11 +69,11 @@ export HF_TOKEN=...             # optional (e.g. for gated/private mirrors)
 ### 1. Single-factor backtests (单因子回测)
 
 ```bash
-python scripts/prepare_qlib_data.py --csv-dir data/stock_data --qlib-dir ~/.qlib/qlib_data/alpha_r1
-python scripts/run_factor_backtest.py --alphas all
+python scripts/run_realtime_backtest.py --alphas all            # 全市场（需大显存）
+python scripts/run_realtime_backtest.py --alphas all --zxg      # 自选股 universe（默认路径）
 ```
 
-每个因子输出 `result/alpha_backtest/alphaNNN.json`。数据目录结构约定见 `data/README.md`。
+每个因子输出 `result/alpha_backtest/alphaNNN.json`。`--device cpu` 可在显存不足时切换计算设备。
 
 ### 2. Factor descriptions (因子描述生成)
 
@@ -107,14 +108,14 @@ python scripts/parse_outputs.py --result-dir result/alpha_select
 
 ```bash
 # estimate the fixed linear model on the historical window (paper: 2020-2023)
-python scripts/train_linear_model.py --alphas all
+python scripts/train_linear_model.py --alphas all --device cpu
 # backtest the selections with the paper's execution protocol (slot rotation, VWAP, 10 bps)
 python scripts/run_strategy_backtest.py \
     --selections result/alpha_select/parsed/selections.json \
-    --betas result/linear_model/betas.csv
+    --betas result/linear_model/betas.csv --device cpu
 ```
 
-将解析出的因子选择转化为可交易的 top-10 等权组合：资金在 `holding_days` 个槽位间轮换（每日再平衡一个槽位），成交价使用当日 `$vwap`（缺失时回退 `$close`），双边手续费 10 bps，闲置现金按无风险利率计息，决策日 t 使用 t-1 日的因子值打分。输出指标 JSON（AR / 超额 SR / MDD / Sortino / Calmar / IR，相对基准）与逐日净值 CSV 至 `configs/strategy.yaml: output_dir`。`--selections` 传入多轮选择文件目录时，会额外输出多轮平均结果。涨跌停过滤已实现但默认关闭（日线数据不含涨跌停标记；见 `configs/strategy.yaml`）。
+将解析出的因子选择转化为可交易的 top-10 等权组合：资金在 `holding_days` 个槽位间轮换（每日再平衡一个槽位），成交价使用当日 VWAP（缺失时回退收盘价），双边手续费 10 bps，闲置现金按无风险利率计息，决策日 t 使用 t-1 日的因子值打分。输出指标 JSON（AR / 超额 SR / MDD / Sortino / Calmar / IR，相对基准）与逐日净值 CSV 至 `configs/strategy.yaml: output_dir`。`--selections` 传入多轮选择文件目录时，会额外输出多轮平均结果。涨跌停过滤已实现但默认关闭（日线数据不含涨跌停标记；见 `configs/strategy.yaml`）。
 
 ## Results (实验结果)
 
@@ -171,8 +172,8 @@ Alpha-R1 基于 Qwen3-8B，使用 [verl](https://github.com/volcengine/verl) 以
 ```
 src/alpha_r1/
 ├── factors/       Alpha101 formula library + description loading/concatenation
-├── backtest/      qlib data conversion, Alpha101→qlib expressions, single-factor
-│                  backtest, linear model, slot-rotation strategy backtest
+├── backtest/      TDengine-direct single-factor backtest (GPU factors), linear
+│                  model, slot-rotation strategy backtest
 ├── generation/    OpenRouter client, market memory, description generation
 ├── inference/     transformers / vLLM backends, prompt builder, selection loop
 └── parsing/       <alpha_list> extraction and validation
@@ -204,5 +205,6 @@ examples/          minimal example inputs
 - **[2026.09]** 🧩 代码发布：qlib 单因子回测、因子描述生成（OpenRouter）、Alpha-R1 推理、输出解析、端到端策略回测，以及 GRPO 训练配置 + 参考奖励实现。
   - ✅ 推理代码（Alpha Screening Pipeline）
   - ✅ 模型权重（[`FinStep/Alpha-R1`](https://huggingface.co/FinStep/Alpha-R1)）
+- **[2026.09]** 🔄 数据层直连化：移除 qlib/CSV 中间链路，全链路 TDengine 直连 + GPU 因子计算；universe 排除北交所；新增环境体检技能 `check-alpha-r1-env`。
 
 _欢迎 ⭐ Star 本仓库，获取最新进展！_
