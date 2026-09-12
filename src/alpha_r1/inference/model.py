@@ -1,11 +1,5 @@
 """Transformers (Hugging Face) inference backend for Alpha-R1."""
 
-import os
-
-# Default to the HF mirror (the official hub is unreachable from CN networks).
-# Must be set before huggingface_hub is imported; override via HF_ENDPOINT.
-os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
